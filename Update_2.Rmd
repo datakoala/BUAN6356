@@ -1,0 +1,91 @@
+---
+title: "Update_2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loadPackages, warning=FALSE, message=FALSE, results='hide'  }
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(esquisse, forecast, tidyverse, 
+               gplots, GGally, gganimate,
+               mosaic, scales, mosaic, mapproj, mlbench, data.table, ggcorrplot, leaps, corrplot, MASS, caret, ggplot2, knitr, ggmap, grid, mlbench, gridExtra)
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r Read In Data}
+  ab.df <- read.csv("AB_US_2020.csv")
+  
+```
+
+
+```{r Clean Data}
+  ab.dt <- as.data.table(ab.df)
+  ab.dt <- ab.dt[,-5] # Remove column 5 - neighborhood group, more than 50% empty
+  ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
+  ab.dt <- ab.dt[price>0] # no free listings
+  
+  ###TO DO###
+  #Make all cities, cities
+  #Remove all nulls
+  #Remove irrelevant columns
+  #Make categorical variables factors
+  
+  ###Nice to Have###
+  #States
+  
+  ###Next Steps###
+  #Calculate est montly revenue based off min # nights, price, and avg # reviews per month
+  #Look at Zillow data
+  
+
+```
+
+```{r Add States}
+library(sp)
+library(maps)
+library(maptools)
+
+# The single argument to this function, pointsDF, is a data.frame in which:
+#   - column 1 contains the longitude in degrees (negative in the US)
+#   - column 2 contains the latitude in degrees
+
+lonlat_to_state_sp <- function(pointsDF) {
+    # Prepare SpatialPolygons object with one SpatialPolygon
+    # per state (plus DC, minus HI & AK)
+    states <- map('state', fill=TRUE, col="transparent", plot=FALSE)
+    IDs <- sapply(strsplit(states$names, ":"), function(x) x[1])
+    states_sp <- map2SpatialPolygons(states, IDs=IDs,
+                     proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Convert pointsDF to a SpatialPoints object 
+    pointsSP <- SpatialPoints(pointsDF, 
+                    proj4string=CRS("+proj=longlat +datum=WGS84"))
+
+    # Use 'over' to get _indices_ of the Polygons object containing each point 
+        indices <- over(pointsSP, states_sp)
+
+    # Return the state names of the Polygons object containing each point
+    stateNames <- sapply(states_sp@polygons, function(x) x@ID)
+    stateNames[indices]
+}
+test.dt <- ab.dt[(1:10),]
+
+test.dt$state <- lonlat_to_state_sp(test.dt[,6:7])
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
