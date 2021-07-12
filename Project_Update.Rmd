@@ -1,0 +1,414 @@
+---
+title: "Update_2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loadPackages, warning=FALSE, message=FALSE, results='hide'  }
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(esquisse, forecast, tidyverse, 
+               gplots, GGally, gganimate,
+               mosaic, scales, mapproj, mlbench, data.table, ggcorrplot, leaps, corrplot, MASS, caret, ggplot2, knitr, ggmap, grid, mlbench, gridExtra,ggplot2,lattice,ROSE,randomForest,dplyr,e1071,rpart,rpart.plot,mosaicData,readr)
+```
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r Read In Data}
+  ab.df <- fread("AB_US_2020.csv")
+  
+```
+
+##Clean Data
+```{r Clean Data}
+  ab.dt <- as.data.table(ab.df)
+  ab.dt <- ab.dt[,-c(4:6)] # Remove column 4-6: neighborhood group and name (covered by city), host name, keep host ID
+  ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
+  ab.dt <- ab.dt[price>0] # no free listings
+  ab.dt <- ab.dt[!(name == "" | is.na(name)), ] # remove no name listings
+  ab.dt[is.na(ab.dt)] <- 0 # replace empty values in last review, num reviews and avg reviews with 0
+  
+  ab.dt$room_type <- factor(ab.dt$room_type) #make categorical variables factors
+  ab.dt$city <- factor(ab.dt$city)
+
+#check for any remaining missing values  
+missingvalues = (sum(is.na(ab.dt)))
+print("Check for Remaining Missing Values")
+print(missingvalues)
+
+
+#checking class of each variable
+class=sapply(ab.dt,class)
+class
+table(class)
+
+  ###TO DO###
+  #Make count.dt cities into states
+  
+  ###Nice to Have###
+  #Write for loop to remove nulls
+  
+  ###Next Steps###
+  #Calculate est montly revenue based off min # nights, price, and avg # reviews per month
+  #Look at Zillow data
+  
+
+```
+
+
+```{r Replaced in Clean Data Section}
+ab.df <- read.csv("C:/Users/bilwa/Desktop/R dataset.csv") # Do not read in data from a specific file path as this will not run on anyone else's computer
+ab.dt <- as.data.table(ab.df)
+ ab.dt <- ab.dt[,-3:-5] # Remove column 3 to 5 - host_name, hostid, neightborhood and neighborhood group
+# Do not remove host ID, if we want to calculate potential earnings per host we need the data. Host name is not useful for this because people can have the same name
+
+ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
+ab.dt <- ab.dt[price>0] # no free listings
+
+
+ab.dt <- ab.dt[!(ab.dt$name == "" | is.na(ab.dt$name)), ] #Removing blank values from the column names
+ab.dt <- ab.dt[!(ab.dt$latitude == "" | is.na(ab.dt$latitude)), ]
+ab.dt <- ab.dt[!(ab.dt$longitude == "" | is.na(ab.dt$longitude)), ]
+ab.dt <- ab.dt[!(ab.dt$room_type == "" | is.na(ab.dt$room_type)), ]
+ab.dt <- ab.dt[!(ab.dt$price == "" | is.na(ab.dt$price)), ] ##Already taken care of in line 101
+ab.dt <- ab.dt[!(ab.dt$minimum_nights == "" | is.na(ab.dt$minimum_nights)), ]
+
+ab.dt <- ab.dt[!(ab.dt$number_of_reviews == "" | is.na(ab.dt$number_of_reviews)), ] ##Wouldn't remove this, we will need it for other analysis. No reviews doesn't necessarily mean the listing is inactive ##ALso misspelled variable ab.dt with b.dt
+ab.dt <- ab.dt[!(ab.dt$calculated_host_listings_count == "" | is.na(ab.dt$calculated_host_listings_count)), ] ##Host listings will never be less than 1
+ab.dt <- ab.dt[!(ab.dt$availability_365 == "" | is.na(ab.dt$availability_365)), ] # Already taken care of in line 100
+ab.dt <- ab.dt[!(ab.dt$city == "" | is.na(ab.dt$city)), ] 
+ab.dt <- ab.dt[!(ab.dt$last_review == "" | is.na(ab.dt$last_review)), ] # Removing blank values from the column last_review ##Why?
+ab.dt <- ab.dt[!(ab.dt$reviews_per_month == "" | is.na(ab.dt$reviews_per_month)), ]# Removing blank values from the column reviews_per_month ##Why?
+percentage = (sum(is.na(ab.dt))/prod(dim(ab.dt)))*100
+print("Percenatge of missing values")
+print(percentage)
+
+ab.dt <- ab.dt[!(ab.dt$reviews_per_month == "" | is.na(ab.dt$reviews_per_month)), ] # duplicate?
+```
+
+```{r}
+##Why? All missing values have already been removed. If we wanted to do this need to calculate while finding missing values
+#missing values in the data set
+missingvalue1 <- sapply(ab.dt,function(x)sum(length(which(is.na(x)))))
+missingvalue1
+# plotting the missing values
+plot(missingvalue1,pch=19,col="purple",main="Missing values present",
+     xlab="Amount missing")
+```
+
+##Price Scatter Plot
+```{r Price Scatter Plot}
+
+```
+##Locations
+
+```{r US Map}
+count.dt <- ab.dt[, .N, by=.(city)]
+##TO DO: City change to state
+mUSMap(data=count.dt, key ="city", fill="N")
+
+```
+
+```{r}
+ab.dt #why print dt? Can use head if needed
+# Price distribution
+class(ab.dt$price) # we already checked this
+ab.dt$price <- as.numeric(ab.dt$price) #doesn't need to be numeric?
+class(ab.dt$price)
+hist(ab.dt$price,xlab = "PRICE", freq = T,
+     ylab = "count",main = "Price Histogram",
+     col = "purple") 
+          ##very difficult to read, buckets need to be defined
+boxplot(ab.dt$price,col="purple",horizontal = T,
+        xlab="PRICE",ylab="PRICE counts",main="PRICE distribution") ##This is not a good way to represent this
+
+```
+
+
+
+
+```{r}
+# Minimum_nights distribution
+class(ab.dt$minimum_nights)
+ab.dt$minimum_nights <- as.numeric(ab.dt$minimum_nights) #why?
+class(ab.dt$minimum_nights)
+hist(ab.dt$minimum_nights, xlab="minimum_nights", freq = T,
+     ylab = "count",main = "minimum_nights Histogram",
+     col = "purple") 
+boxplot(ab.dt$minimum_nights,col="purple",horizontal = T,
+        xlab="minimum_nights",ylab="minimum_nights counts",main="minimum_nightsdistribution")
+
+```
+
+
+```{r}
+# number_of_reviews distribution
+class(ab.dt$number_of_reviews)
+ab.dt$number_of_reviews <- as.numeric(ab.dt$number_of_reviews) #why?
+class(ab.dt$number_of_reviews)
+hist(ab.dt$number_of_reviews,xlab = "number_of_reviews", freq = T,
+     ylab = "count",main = "number_of_reviews Histogram",
+     col = "purple") 
+boxplot(ab.dt$number_of_reviews,col="purple",horizontal = T,
+        xlab="number_of_reviews",ylab="number_of_reviews counts",main="number_of_reviews distribution")
+```
+
+
+```{r}
+##reviews_per_month distribution
+class(ab.dt$reviews_per_month)
+ab.dt$reviews_per_month <- as.numeric(ab.dt$reviews_per_month)
+class(ab.dt$reviews_per_month)
+hist(ab.dt$reviews_per_month,xlab = "reviews_per_month", freq = T,
+     ylab = "count",main = "reviews_per_month Histogram",
+     col = "purple") 
+boxplot(ab.dt$reviews_per_month,col="purple",horizontal = T,
+        xlab="reviews_per_month",ylab="reviews_per_month counts",main="reviews_per_month distribution")
+
+#need to investigate anything larger than 31
+```
+
+
+```{r}
+## calculated_host_listings_count
+class(ab.dt$calculated_host_listings_count)
+ab.dt$calculated_host_listings_count<- as.numeric(ab.dt$calculated_host_listings_count)
+class(ab.dt$calculated_host_listings_count)
+hist(ab.dt$calculated_host_listings_count,xlab = "calculated_host_listings_count", freq = T,
+     ylab = "count",main = "calculated_host_listings_count Histogram",
+     col = "purple") 
+boxplot(ab.dt$calculated_host_listings_count,col="purple",horizontal = T,
+        xlab="calculated_host_listings_count",ylab="calculated_host_listings_count counts",main="calculated_host_listings_count distribution")
+
+```
+
+
+
+```{r}
+## availability_365
+
+class(ab.dt$availability_365)
+ab.dt$availability_365<- as.numeric(ab.dt$availability_365)
+class(ab.dt$availability_365)
+hist(ab.dt$availability_365,xlab = "availability_365", freq = T,
+     ylab = "count",main = "availability_365 Histogram",
+     col = "purple") 
+boxplot(ab.dt$availability_365,col="purple",horizontal = T,
+        xlab="availability_365",ylab="availability_365 counts",main="availability_365 distribution")
+```
+
+```{r}
+##longitude distribution
+## Is this valuable information to have?
+
+class(ab.dt$longitude)
+ab.dt$longitude<- as.numeric(ab.dt$longitude)
+class(ab.dt$longitude)
+hist(ab.dt$longitude,xlab = "longitude", freq = T,
+     ylab = "count",main = "longitude Histogram",
+     col = "purple") 
+boxplot(ab.dt$longitude,col="purple",horizontal = T,
+        xlab="longitude",ylab="longitude counts",main="longitude distribution")
+
+
+```
+
+
+
+```{r}
+## latitude distribution
+
+class(ab.dt$latitude)
+ab.dt$latitude<- as.numeric(ab.dt$latitude)
+class(ab.dt$latitude)
+hist(ab.dt$latitude,xlab = "latitude", freq = T,
+     ylab = "count",main = "latitude Histogram",
+     col = "purple") 
+boxplot(ab.dt$latitude,col="purple",horizontal = T,
+        xlab="latitude",ylab="latitude counts",main="latitude distribution")
+```
+
+
+```{r}
+## Room_type
+options(scipen = 999)
+plot(ab.dt$room_type)
+
+```
+
+
+
+```{r}
+## Calculating IQR and Outlier removal for Price
+Q <- quantile(ab.dt$price, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$price)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$price > (Q[1] - 1.5*iqr) & ab.dt$price < (Q[2]+1.5*iqr))
+##If removing outliers, only remove if data is wrong, not if it is an outlier, also subset to a new DT, do not write back to original
+
+## Calculating IQR and Outlier removal for Longitude
+Q <- quantile(ab.dt$longitude, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$longitude)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$longitude > (Q[1] - 1.5*iqr) & ab.dt$longitude < (Q[2]+1.5*iqr))
+
+## Calculating IQR and Outlier removal for Latitude
+Q <- quantile(ab.dt$latitude, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$latitude)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$latitude > (Q[1] - 1.5*iqr) & ab.dt$latitude < (Q[2]+1.5*iqr))
+## Calculating IQR and Outlier removal for Number_of_reviews
+Q <- quantile(ab.dt$number_of_reviews, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$number_of_reviews)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$number_of_reviews > (Q[1] - 1.5*iqr) & ab.dt$number_of_reviews < (Q[2]+1.5*iqr))
+## Calculating IQR and Outlier removal for reviews_per_month
+Q <- quantile(ab.dt$reviews_per_month, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$reviews_per_month)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$reviews_per_month > (Q[1] - 1.5*iqr) & ab.dt$reviews_per_month < (Q[2]+1.5*iqr))
+
+## Calculating IQR and Outlier removal for calculated_host_of_listings
+Q <- quantile(ab.dt$calculated_host_listings_count, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$calculated_host_listings_count)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$calculated_host_listings_count > (Q[1] - 1.5*iqr) & ab.dt$calculated_host_listings_count < (Q[2]+1.5*iqr))
+## Calculating IQR and Outlier removal for Availability>365
+Q <- quantile(ab.dt$availability_365, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$availability_365)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$availability_365 > (Q[1] - 1.5*iqr) & ab.dt$availability_365 < (Q[2]+1.5*iqr))
+## Calculating IQR and Outlier removal for Minimum night
+Q <- quantile(ab.dt$minimum_nights, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(ab.dt$minimum_nights)
+up <- Q[2]+1.5*iqr # Upper Range
+low<- Q[1]-1.5*iqr # Lower Range
+ab.dt<- subset(ab.dt, ab.dt$minimum_nights > (Q[1] - 1.5*iqr) & ab.dt$minimum_nights < (Q[2]+1.5*iqr))
+```
+
+
+```{r}
+## city distribution ===== not correct #Categorical data needs labels
+ab.df$city <- as.factor(ab.df$city)
+levels(ab.df$city)
+plot(ab.df$city,col="purple",ylab="Count",
+     main="Distribution of different cities in our dataset")
+
+
+```
+
+price wrt other variables  
+  
+```{r}
+## room type vs price
+ggplot(ab.df, aes(x = room_type, y = price,color="room_type")) +geom_boxplot(outlier.shape = NA) +theme(axis.text.x = element_text(angle = 90, hjust = 1)) +coord_cartesian(ylim = c(0, 500)) +ggtitle("room type vs price")
+
+
+```
+
+
+
+
+
+
+
+```{r}
+## price vs lalitude
+###City is a better choice than lat or long
+ggplot(ab.df) +
+geom_point(aes(x = latitude, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("lalitude vs price")
+```
+
+
+```{r}
+## price vs longitude
+ggplot(ab.df) +
+geom_point(aes(x = longitude, y = room_type), color = "tomato2", alpha = 0.5) +
+ggtitle("longitude vs price")
+```
+
+
+
+
+
+```{r}
+### price vs city
+###Illegible
+ggplot(ab.df) +
+geom_point(aes(x = city, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("city vs price")
+```
+
+
+```{r}
+##price vs no_of_reviews
+ggplot(ab.df) +
+geom_point(aes(x = number_of_reviews, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("number_of_reviews vs price")
+```
+
+
+
+```{r}
+##price vs minimum nights
+##scipen off
+ggplot(data = ab.df, aes(x = minimum_nights, y = price,color=minimum_nights))  +geom_point(size=0.1)
+ggtitle("minimum_nights vs price")
+```
+
+
+
+```{r}
+##remove outliers from price
+## Don't remove outliers just because they're inconvienient
+
+attach(ab.df)  ## error
+price_new <- price[!price %in% boxplot.stats(price)$out]
+hist(price_new,xlab = "PRICE", freq = T,
+     ylab = "count",main = "New Price Histogram",
+     col = "purple")
+boxplot(price_new,col="purple",horizontal = T,
+        xlab="PRICE",ylab="New PRICE counts",main="New PRICE distribution")
+class(ab.df$room_type)
+ab.df$room_type <- as.factor(ab.df$room_type)
+levels(ab.df$room_type)
+sum(is.na(ab.df$room_type))
+```
+
+
+
+
+```{r}
+unique(ab.df[c("city")]) # First column should be counts or something easier to understand
+
+##  unique(ab.dt$city)  ## Is shorter and easier to read
+```
+
+
+```{r}
+
+##number_of_reviews (error)
+#what is this?
+attach(ab.df)
+newreviews <- number_of_reviews[!number_of_reviews %in% boxplot.stats(number_of_reviews)$out]
+hist(newreviews,xlab = "REVIEW", freq = T,
+     ylab = "count",main = "New Reviews Histogram",
+     col = "purple")
+boxplot(newreviews,col="purple",horizontal = T,
+        xlab="REVIEW",ylab="New PRICE counts",main="NewReview distribution")
+```
+
+
