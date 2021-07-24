@@ -28,9 +28,11 @@ When you click the **Knit** button a document will be generated that includes bo
 ```{r Clean Data}
   ab.dt <- as.data.table(ab.df)
   ab.dt <- ab.dt[,-5] # Remove column 5 - neighborhood group, more than 50% empty
+  ab.dt <- ab.dt[,-5] # Remove column 5 - neighborhood inaccurate and inconsistent. City a better option
   ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
   ab.dt <- ab.dt[price>0] # no free listings
   
+  unique(ab.dt$city) #List of cities - Hawaii is not a city, need to fix?
   ###TO DO###
   #Make all cities, cities
   #Remove all nulls
@@ -42,6 +44,9 @@ When you click the **Knit** button a document will be generated that includes bo
   
   ###Next Steps###
   #Calculate est montly revenue based off min # nights, price, and avg # reviews per month
+  rev.dt <- ab.dt
+  rev.dt$revenue <- set(rev.dt, (rev.dt$price*rev.dt$minimum_nights*rev.dt$reviews_per_month))
+  
   #Look at Zillow data
   
 
