@@ -1,6 +1,10 @@
 ---
-title: "Update_2"
-output: html_document
+title: "Project"
+author: "Kandarp"
+date: "7/12/2021"
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -11,86 +15,331 @@ knitr::opts_chunk$set(echo = TRUE)
 if(!require("pacman")) install.packages("pacman")
 pacman::p_load(esquisse, forecast, tidyverse, 
                gplots, GGally, gganimate,
-               mosaic, scales, mosaic, mapproj, mlbench, data.table, ggcorrplot, leaps, corrplot, MASS, caret, ggplot2, knitr, ggmap, grid, mlbench, gridExtra)
+               mosaic, scales, mapproj, mlbench, data.table, ggcorrplot, leaps, corrplot, MASS, caret, ggplot2, knitr, ggmap, grid, mlbench, gridExtra,ggplot2,lattice,ROSE,randomForest,dplyr,e1071,rpart,rpart.plot,mosaicData,readr)
 ```
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+In these AirBnb listings from the USA, our focus is on conducting various exploratory data analyses and predicting the price of listings within the data set.  Here, we will first assess the data for missing values and outliers.
+
 
 ```{r Read In Data}
-  ab.df <- read.csv("AB_US_2020.csv")
+  ab.df <- fread("AB_US_2020.csv")
   
 ```
 
+##Clean Data
 
 ```{r Clean Data}
   ab.dt <- as.data.table(ab.df)
-  ab.dt <- ab.dt[,-5] # Remove column 5 - neighborhood group, more than 50% empty
-  ab.dt <- ab.dt[,-5] # Remove column 5 - neighborhood inaccurate and inconsistent. City a better option
+  ab.dt <- ab.dt[,-c(4:6)] # Remove column 4-6: neighborhood group and name (covered by city), host name, keep host ID
   ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
   ab.dt <- ab.dt[price>0] # no free listings
+  ab.dt <- ab.dt[!(name == "" | is.na(name)), ] # remove no name listings
+  ab.dt[is.na(ab.dt)] <- 0 # replace empty values in last review, num reviews and avg reviews with 0
   
-  unique(ab.dt$city) #List of cities - Hawaii is not a city, need to fix?
-  ###TO DO###
-  #Make all cities, cities
-  #Remove all nulls
-  #Remove irrelevant columns
-  #Make categorical variables factors
-  
-  ###Nice to Have###
-  #States
-  
-  ###Next Steps###
-  #Calculate est montly revenue based off min # nights, price, and avg # reviews per month
-  rev.dt <- ab.dt
-  rev.dt$revenue <- set(rev.dt, (rev.dt$price*rev.dt$minimum_nights*rev.dt$reviews_per_month))
-  
-  #Look at Zillow data
-  
+  ab.dt$room_type <- factor(ab.dt$room_type) #make categorical variables factors
+  ab.dt$city <- factor(ab.dt$city)
+#check for any remaining missing values  
+missingvalues = (sum(is.na(ab.dt)))
+print("Check for Remaining Missing Values")
+print(missingvalues)
+#checking class of each variable
+class=sapply(ab.dt,class)
+class
+table(class)
+```
+
+
+Our initial hypotheses are as follows:
+a.    H0: Price is not predicted by any variable in the data set
+      H1: Price can be predicted by one or more of the variables in the data set
+      
+b.    H0: Occupancy is not predicted by any variable in the data set
+      H1: Occupancy can be predicted by one or more of the variables in the data set
+      
+When cleaning the data, we decided to remove the variables "Host name", "Neighborhood Group", and "Neighborhood".  The reason behind this decision were that "Host name" is irrelevant to our hypotheses.  Furthermore, "Neighborhood Group" and "Neighborhood" are both included in the variable "City".  Cleaning the data also involved removing null values and ensuring no relevant data was left out. In this dataset, variables such as “number_of_reviews” and “reviews_per_month” contained null values. Upon further investigation, we discovered that a property posting zero reviews in any given month cannot be assumed to qualify as a null value.  Rather, it simply states that the number of reviews in that month were zero, and thus should not be removed from the dataset.
+
+With our hypotheses in mind, the following exploratory analyses and data visualization were conducted:
+
+The following two charts plot price against listing availability.  The line chart allows us to quickly see if there are any immediate patterns within the data.  The scatter plot provides the same information, but allows us the ability to add a linear regression to assess any correlation between the two variables.
+
+
+###Exploratory Data Analysis
+##line chart
+
+```{r}
+# line chart
+ggplot(ab.dt, aes(x=price, y= availability_365)) + geom_line()
+```
+
+
+##Price Scatter Plot
+```{r Price Scatter Plot}
+plot(ab.dt$price,ab.dt$availability_365, xlab = "price" , ylab = "availability", pch=20)
+abline(lm(price~availability_365, data = ab.dt),col='red')
+```
+
+
+The following charts provide the distributions for each relevant variable.
+
+
+##price distribution
+
+```{r}
+# price distribution
+barplot(ab.dt$price,col="red",
+        xlab="PRICE",ylab="PRICE counts",main="PRICE distribution", limits = c(0,1000))
+count1 <- ab.dt[, .N, by=.(price)]
+```
+
+```{r}
+# minimun_nights distribution
+barplot(ab.dt$minimum_nights,col="red",
+        xlab="minimum_nights",ylab="minimum_nights counts",main="minimum_nightsdistribution")
+count2 <- ab.dt[, .N, by=.(minimum_nights)]
+```
+
+```{r}
+# number_of_reviews distribution
+barplot(ab.dt$number_of_reviews,col="red",
+       xlab="number_of_reviews",ylab="number_of_reviews counts",main="number_of_reviews distribution")
+count3 <- ab.dt[, .N, by=.(number_of_reviews)]
+```
+
+```{r}
+# reviews_per_month distribution
+barplot(ab.dt$reviews_per_month,col="red",
+       xlab="reviews_per_month",ylab="reviews_per_month counts",main="reviews_per_month distribution")
+count4 <- ab.dt[, .N, by=.(reviews_per_month)]
+```
+
+```{r}
+#  calculated_host_listings_count distribution
+barplot(ab.dt$calculated_host_listings_count,col="red",
+       xlab="calculated_host_listings_count",ylab="calculated_host_listings_count counts",main="calculated_host_listings_count distribution")
+```
+
+```{r}
+#  availability_365 distribution
+barplot(ab.dt$availability_365, width=10, horiz = TRUE,
+        xlab="availability_365 Counts",ylab="availability_365",main="availability_365 distribution", ylim = c(0,400), xpd = FALSE, axes=TRUE)
+```
+
+
+To further investigate the data, each the total number of listings per state were plotted on a map of the United States.  A simplifying assumption needed to be made that each city listed in the data set corresponds to a major city within a state (i.e. Portland corresponds to Portland, OR and not Portland, TX).
+
+
+##Locations 
+
+```{r US Map}
+##Rename levels from city to state
+
+levels(ab.dt$city)<- c("NC", "TX", "MA", "FL", "MA", "IL", "NV", "OH", "CO", "HI", "NJ", "CA", "TN", "LA", "NY", "CA", "CA", "OR", "RI", "OR", "CA", "CA", "CA", "CA", "CA", "WA", "MN", "D.C.")
+
+count.dt <- ab.dt[, .N, by=.(city)]
+
+mUSMap(data=count.dt, key ="city", fill="N")
+```
+
+
+Room type was then plotted to determine which room types are most popular for AirBnb guests.  Based on our analysis, the of the four types available (Entire home/apt, Hotel Room, Private Room, and Shared Room), the two most popular room types are Entire home/apt Private rooms.  These two room types dominate the AirBnb market.  The impact from Hotel Rooms and Shared Rooms is so negligible that we removed this data from our analysis.
+
+
+##Room Type
+
+```{r Room Type}
+## Room_type
+options(scipen = 999)
+plot(ab.dt$room_type)
+#Based on this, decided to remove Hotel Room and Shared room as they are so rare they don't have much impact on our analysis
+ab.dt <- ab.dt[!(room_type == "Hotel room" | room_type == "Shared room"), ] 
+```
+
+
+To continue with our investigation of the data, a correlation matrix was created to determine which variables have the highest correlation with each other.  Based on this matrix, price has the largest correlation with "Number_of_reviews", "Longitude", and "Availability_365".  When determining occupancy rates, the variables "Availability_365" and "Number_of_reviews" were investigated.  "Availability_365" has the highest correlation with "Calculated_host_listings_count", "Minimum_nights", and "Price", whereas "Number_of_reviews" had high correlations with "id", "host_id", and "Calculated_host_listings_count".
+
+
+##Correlation Plot
+
+```{r correlation plot}
+corr.Ab <- ab.dt[,c(-2,-4,-6,-10,-11,-14)]
+## calculate correlation table
+corr.mat <- cor(corr.Ab)
+print(corr.mat)
+## create correlation plot
+corr.plot <- ggcorrplot (corr.mat, lab = TRUE, colors =
+c("white","#e9b7ce","#FF1F1F"),
+title = "Correlation Matrix")
+print(corr.plot)
+
 
 ```
 
-```{r Add States}
-library(sp)
-library(maps)
-library(maptools)
 
-# The single argument to this function, pointsDF, is a data.frame in which:
-#   - column 1 contains the longitude in degrees (negative in the US)
-#   - column 2 contains the latitude in degrees
+To further investigate our first hypothesis regarding price, relevant room types were plotted against price using a box plot to determine the price distribution per room type.
 
-lonlat_to_state_sp <- function(pointsDF) {
-    # Prepare SpatialPolygons object with one SpatialPolygon
-    # per state (plus DC, minus HI & AK)
-    states <- map('state', fill=TRUE, col="transparent", plot=FALSE)
-    IDs <- sapply(strsplit(states$names, ":"), function(x) x[1])
-    states_sp <- map2SpatialPolygons(states, IDs=IDs,
-                     proj4string=CRS("+proj=longlat +datum=WGS84"))
 
-    # Convert pointsDF to a SpatialPoints object 
-    pointsSP <- SpatialPoints(pointsDF, 
-                    proj4string=CRS("+proj=longlat +datum=WGS84"))
+##Price wrt other variables  
 
-    # Use 'over' to get _indices_ of the Polygons object containing each point 
-        indices <- over(pointsSP, states_sp)
-
-    # Return the state names of the Polygons object containing each point
-    stateNames <- sapply(states_sp@polygons, function(x) x@ID)
-    stateNames[indices]
-}
-test.dt <- ab.dt[(1:10),]
-
-test.dt$state <- lonlat_to_state_sp(test.dt[,6:7])
+```{r}
+## room type vs price
+ggplot(ab.dt, aes(x = room_type, y = price,color="room_type")) +geom_boxplot(outlier.shape = NA) +theme(axis.text.x = element_text(angle = 90, hjust = 1)) +coord_cartesian(ylim = c(0, 500)) +ggtitle("room type vs price")
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+Price was then plotted against longitude and latitude to see if there were any correlations or discernible patterns.  Most prices are spread among most longitudes and latitudes, however there are some that warrant futher investigation.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+```{r}
+## price vs latitude
+ggplot(ab.dt) +
+geom_point(aes(x = latitude, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("latitude vs price")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+## price vs longitude
+ggplot(ab.dt) +
+geom_point(aes(x = longitude, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("longitude vs price")
+```
+
+
+Price was then plotted against city, with each city being represented by its respective state.  From a quick look at this graph, CA and HI have some of the highest AirBnb prices in the USA, as to be expected.  However, there are some data points in NC and MN that are also worth investigating.
+
+
+```{r}
+### price vs city
+ggplot(ab.dt) +
+geom_point(aes(x = city, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("city vs price")
+```
+
+
+Price was then plotted against number of reviews and minimum nights to establish any trends.
+
+
+```{r}
+##price vs no_of_reviews
+ggplot(ab.dt) +
+geom_point(aes(x = number_of_reviews, y = price), color = "tomato2", alpha = 0.5) +
+ggtitle("number_of_reviews vs price")
+```
+
+
+```{r}
+##price vs minimum nights
+ggplot(data = ab.df, aes(x = minimum_nights, y = price,color=minimum_nights))  +geom_point(size=0.1) +
+  xlim(1,1250)
+  ggtitle("minimum_nights vs price")
+```
+
+
+###Modeling/Preliminary Analysis
+
+We have run some preliminary linear regressions for price against every variable in the data set to determine if we are able to reject, or cannot reject, our first null hypothesis.
+
+
+##Simple Linear regression
+
+```{r}
+#use all data
+ab1.dt <- ab.dt
+
+# select variables for regression
+ab1.dt <-ab.dt [, c(6,7,8,9,11,12,13)]
+```
+
+
+A Training set of 80% of the data set was created, with the remaining 20% constituting our test/validation set.
+
+
+#create data partition
+
+```{r datapartition}
+set.seed(123)
+sample<- sample.int(n=nrow(ab1.dt),size=floor(round(0.80*nrow(ab1.dt))), replace = F)
+train.df <- ab1.dt[sample, ]
+valid.df <- ab1.dt[-sample, ]
+nrow(train.df)
+nrow(valid.df)
+```
+
+#run regression
+```{r Regression}
+ab1.lm <- lm(price ~ ., data = train.df)
+
+options(sipen = 999)
+summary(ab1.lm)
+plot(ab1.lm)
+```
+
+
+After running the regression, it was determined that there are some outliers that need to be investigated utilizing Residuals vs leverage.  When looking at the residuals vs fitted plot, it seems to suggest that a linear model may not be the best model for this data set.  The Q-Q plot seems to suggest that the entirety of the data does not follow a normal distribution.  And finally, the Scale-Location plot almost certainly indicates an issue of heteroscedasticity.  However, with these issues in mind, we still continued with our preliminary linear regressions to assess the goodness of fit of our model as well as its predictive power.
+
+
+#Stepwise regression
+
+```{r Stepwise Regression}
+step.lm <- lm(price ~ ., data = train.df)
+options(scipen = 999)
+
+step.lm.run <- step(step.lm, direction = "both")
+summary(step.lm.run)
+```
+
+
+After running a Stepwise Linear regression, the model reported a statistically significant p-value, but an Adjusted R-Squared of 3.112%.  This can be interpreted to mean that the model contains a good amount of statistically significant variables, however the current linear model does not fit the data in any meaningful way.  Attempting to predict price using a model that only explains 3.112% of the data will simply be a waste of time.  In an effort to compensate for the skewness of the data, a log-linear regression was conducted.
+
+
+##Log and Partition
+
+
+```{r Log and Partition}
+
+ab.log <-ab1.dt [, c(2:7)]
+ab.log <- ab.log[reviews_per_month>=1 & number_of_reviews > 0] #Remove to avoid inf and na values
+ab.log <- log(ab.log)
+set.seed(123)
+sample<- sample.int(n=nrow(ab.log),size=floor(round(0.80*nrow(ab.log))), replace = F)
+log.train <- ab.log[sample, ]
+log.valid <- ab.log[-sample, ]
+nrow(log.train)
+nrow(log.valid)
+```
+##Logged LM
+
+```{r Log LM}
+log.lm <- lm(price ~ ., data = log.train)
+summary(log.lm)
+plot(log.lm)
+```
+
+
+The results from the log-linear regression provided some answers as the model now seems to fit the data fairly well according to the residuals vs fitted plot.  The Q-Q plot indicates that the data mostly follows a normal distribution. With the log-linear regression, what was assumed to be a heteroscedasiticy issue was found to be a skewness issue and was resolved with this regression model according to the scale-location plot.  There are still some outliers present that need to be investigated when looking at Residuals vs leverage. 
+
+
+##Outliers
+```{r Outliers from plots}
+log.train[37124,]
+```
+
+
+The price distribution was then investigated using boxplots on the logged data.
+
+
+##logged boxplots
+
+```{r logged boxplots}
+boxplot(log.valid$price,col="purple",horizontal = T,
+        xlab="PRICE",ylab="PRICE counts",main="PRICE distribution")
+```
+
+
+#4. Any challenges you are experiencing?
+
+Some of the biggest challenges we are facing include the skewness of the data and the fact that a linear model does not fit the data well.  The log-linear regression model seemed to deal with the skewness of the data, however the Adjusted R-Squared for that model is 2.966% which is less than the 3.112% of the original simple linear regression model.  Additionally, we still need to fully deal with the issue of missing data and outliers.  These data points need to be more thoroughly investigated and either included or removed from our models.  However, the biggest issues are the skewness and nonlinearity of the data set.
+
+#5. What else will be included in the final report?
+An answer to the skewness and nonlinearity issues will be included in the final report.  Our goal is not only to determine the correlation between price and relevant variables, or even occupancy rates and relevant variables.  Our underlying goal is to use that data to predict potential revenues per AirBnb listing based off of relevant factors.  The final report will detail those relevant factors and provide a framework for potential AirBnb hosts (and customers) to predict which listings will be most profitable (hosts) and subsequently which listings provide the greatest value per dollar spent (customer). 
