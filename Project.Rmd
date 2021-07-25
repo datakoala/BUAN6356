@@ -32,10 +32,11 @@ In these AirBnb listings from the USA, our focus is on conducting various explor
 ```{r Clean Data}
   ab.dt <- as.data.table(ab.df)
   ab.dt <- ab.dt[,-c(4:6)] # Remove column 4-6: neighborhood group and name (covered by city), host name, keep host ID
-  ab.dt <- ab.dt[!(room_type == "Hotel room" | room_type == "Shared room"), ]
+  ab.dt <- ab.dt[!(room_type == "Shared room"), ]
+  #ab.dt <- ab.dt[!(room_type == "Hotel room" | room_type == "Shared room"), ]
   ab.dt <- ab.dt[availability_365>0] # Remove inactive properties
   ab.dt <- ab.dt[price>10] # no free listings
-  ab.dt <- ab.dt[!(name == "" | is.na(name)), ] # remove no name listings
+  ab.dt <- ab.dt[!(name == "" | name %like% "Not Available" | name %like% "not available" | is.na(name)), ] # remove no name listings
   ab.dt[is.na(ab.dt)] <- 0 # replace empty values in last review, num reviews and avg reviews with 0
   
   ab.dt$room_type <- factor(ab.dt$room_type) #make categorical variables factors
@@ -70,6 +71,7 @@ The following two charts plot price against listing availability.  The line char
 ```{r Price Scatter Plot}
 plot(ab.dt$price,ab.dt$availability_365, xlab = "price" , ylab = "availability", pch=20)
 abline(lm(price~availability_365, data = ab.dt),col='red')
+
 ```
 
 
@@ -106,10 +108,11 @@ To further investigate the data, each the total number of listings per state wer
 
 ```{r US Map}
 ##Rename levels from city to state
+locations.dt <- ab.dt
 
-levels(ab.dt$city)<- c("NC", "TX", "MA", "FL", "MA", "IL", "NV", "OH", "CO", "HI", "NJ", "CA", "TN", "LA", "NY", "CA", "CA", "OR", "RI", "OR", "CA", "CA", "CA", "CA", "CA", "WA", "MN", "D.C.")
+levels(locations.dt$city)<- c("NC", "TX", "MA", "FL", "MA", "IL", "NV", "OH", "CO", "HI", "NJ", "CA", "TN", "LA", "NY", "CA", "CA", "OR", "RI", "OR", "CA", "CA", "CA", "CA", "CA", "WA", "MN", "D.C.")
 
-count.dt <- ab.dt[, .N, by=.(city)]
+count.dt <- locations.dt[, .N, by=.(city)]
 
 mUSMap(data=count.dt, key ="city", fill="N")
 ```
@@ -125,7 +128,7 @@ Room type was then plotted to determine which room types are most popular for Ai
 options(scipen = 999)
 plot(ab.dt$room_type)
 #Based on this, decided to remove Hotel Room and Shared room as they are so rare they don't have much impact on our analysis
-ab.dt <- ab.dt[!(room_type == "Hotel room" | room_type == "Shared room"), ] 
+#ab.dt <- ab.dt[!(room_type == "Hotel room" | room_type == "Shared room"), ] 
 ```
 
 
@@ -135,7 +138,7 @@ To continue with our investigation of the data, a correlation matrix was created
 ##Correlation Plot
 
 ```{r correlation plot}
-corr.Ab <- ab.dt[,c(-2,-4,-6,-10,-11,-14)]
+corr.Ab <- ab.dt[,c(-1,-2,-4,-6,-10,-14)]
 ## calculate correlation table
 corr.mat <- cor(corr.Ab)
 print(corr.mat)
@@ -251,14 +254,15 @@ After running a Stepwise Linear regression, the model reported a statistically s
 ```{r Log and Partition}
 
 ab.log <-ab1.dt [, c(2:7)]
+ab.log <- 1+ab.log
 ab.log <- log(ab.log)
 ab.log$room_type <- ab1.dt$room_type
 ab.log$city <- ab1.dt$city
 
-ab.log <- ab.log[reviews_per_month>=1 & number_of_reviews > 0] #Remove to avoid inf and na values
+#ab.log <- ab.log[reviews_per_month>=1 & number_of_reviews > 0] #Remove to avoid inf and na values
 
 set.seed(123)
-sample<- sample.int(n=nrow(ab.log),size=floor(round(0.80*nrow(ab.log))), replace = F)
+sample<- sample.int(n=nrow(ab.log),size=floor(round(0.70*nrow(ab.log))), replace = F)
 log.train <- ab.log[sample, ]
 log.valid <- ab.log[-sample, ]
 nrow(log.train)
@@ -269,6 +273,7 @@ options(scipen = 999)
 
 step.lm.run2 <- step(step.lm2, direction = "both")
 summary(step.lm.run2)
+plot(step.lm.run2)
 ```
 ##Logged LM
 
